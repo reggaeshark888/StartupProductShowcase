@@ -1,0 +1,70 @@
+@startuml C4_Elements
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+!includeurl https://raw.githubusercontent.com/plantuml-stdlib/Azure-PlantUML/release/2-2/dist/AzureCommon.puml
+!define AzurePuml https://raw.githubusercontent.com/plantuml-stdlib/Azure-PlantUML/release/2-2/dist
+
+!includeurl AzurePuml/InternetOfThings/AzureIoTHub.puml
+!includeurl AzurePuml/Storage/AzureBlobStorage.puml
+!includeurl AzurePuml/Analytics/AzureStreamAnalyticsJob.puml
+!includeurl AzurePuml/Compute/AzureFunction.puml
+!includeurl AzurePuml/Analytics/AzureEventHub.puml
+
+
+LAYOUT_WITH_LEGEND()
+
+Person(production_foreman, "Production Foreman", "A production foreman oversees the manufacturing process, managing workers, schedules, and quality control.")
+
+
+System_Ext(machine_system, "CNC Machine Control System (Numerical Control-NC)", "The CNC machine's control system is a software that translates CAD/CAM designs into numerical commands, directing machine movements for precise and efficient machining.")
+
+
+System_Boundary(machine_monitor, "Machine Health Monitoring & OEE System") {
+     ' edge containers
+    Container(cncnetpdm, "CNCnetPDM MTConnect Adapter", "Windows Socket Server Application, utilizing various SDKs for connecting to Numerical Control of machines from different vendors", "It serves as a bidirectional communication hub, enabling real-time data acquisition and control of manufacturing devices.")
+    Container(cnc_data_processor, "CNC Data Processor and Forwarder", "C# Socket Terminal Application", "This terminal application, developed in C#, connects to the CNCnetPDM MTConnect Adapter to retrieve data from CNC machines. It processes and standardizes the data, then forwards it to an IoT hub")
+
+    ' azure subsystem
+    System_Boundary(azure_backend, "azure") {
+        ' azure backend cointainers
+        AzureIoTHub(iot_hub, "IoT Hub", "Standard S1", "Ingress point for all telemetry coming from devices. Uses built-in IoT Hub Routes for routing data to other services.")
+        AzureEventHub(event_hub, "Device Message Event Hub", "Azure Event Hubs","An event ingestion service that reliably captures and stores telemetry data and messages from connected devices via IoT Hub, facilitating real-time analytics and downstream processing.")
+        
+        ' azure function containers
+        AzureFunction(event_hub_trigger, "EventHubTriggerMachineTelemetry", "Python Azure Function with Event Hub Trigger", "Activated by new messages in the Event Hub, processes and writes these messages to a database.")
+        AzureFunction(db_calculations, "CalculateLowFrequencyDataMetricsPastDay", "Python Azure Function with Timer Trigger", "Triggers stored database procedure for calculating daily metrics.")
+        AzureFunction(prod_report, "CreateProductionReport", "Python Azure Function with Timer Trigger", "Triggers stored database procedure for calculating daily metrics.")
+
+        System_Boundary(sql_server, "SQL Server") {
+            ContainerDb(device_db, "Device Database", "Azure SQL Database", "Holds processed telemetry from devices.")
+        }
+        Container(power_bi, "Power BI", "Power BI Embedded", "Connects to the device database and creates visualizations and reports.")
+        Container(mail_service, "Email Service", "Email Communication Service", "Azure service for sending emails.")
+    }
+    
+    Container(customer_share_point, "Customer Share Point", "SharePoint Online Site", "Designed for customers to input, view, and manage information. (e.g. viewing reports, managing info about machine shifts)")
+
+    ' external system to container relations
+    Rel_R(cncnetpdm, machine_system, "Connects to and collects data from internal machines systems and sensors.", "TCP, Modbus(PLCs)")
+
+    ' edge container relations
+    Rel(cnc_data_processor, cncnetpdm, "retrieves machine data from", "TCP socket connection")
+
+    ' container to container relations
+    Rel(iot_hub, cnc_data_processor, "data forwarding and command reception","IoT Hub SDK", "MQTT")
+    Rel_R(event_hub, iot_hub, "data routing", "IoT Hub Routes", "Asynchronous")
+    
+    ' azure function relations 
+    Rel(event_hub_trigger, event_hub, "Event processing", "Event Hub Trigger", "Event-driven")
+    Rel(event_hub_trigger, device_db, "Database writing", "Event Hub Trigger", "Event-driven")
+
+    Rel(db_calculations, device_db, "Metric calculation initiation", "Event Hub Trigger", "Event-driven")
+
+    Rel(prod_report, power_bi, "Report generation", "Timer Trigger", "Scheduled, asynchronous")
+    Rel(prod_report, mail_service, "Report distribution", "Timer Trigger, Email Service SDK", "Scheduled, asynchronous")
+
+    Rel(power_bi, device_db, "Data visualization", "Power BI DirectQuery", "Synchronous, on-demand")
+
+    ' person to container relations
+    Rel(mail_service, production_foreman, "Sends e-mails with reports to", "Azure Communication Services Email", "Asynchronous, API-driven")
+}
+@enduml

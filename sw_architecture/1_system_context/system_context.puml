@@ -1,0 +1,18 @@
+@startuml C4_Elements
+title System Context for Machine Evaluator
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+LAYOUT_WITH_LEGEND()
+
+' person defintion
+Person(production_foreman, "Production Foreman", "A production foreman oversees the manufacturing process, managing workers, schedules, and quality control.")
+
+' system definition
+System(machine_monitor, "Machine Health Monitoring & OEE System", "This system collects data from CNC machines' NC controls, PLCs, and sensors to generate OEE and maintenance reports. It tracks errors, vibrations, and temperatures, predicting necessary part replacements to prevent damage and maintain efficiency.") 
+System_Ext(machine_system, "CNC Machine Control System (Numerical Control-NC)", "The CNC machine's control system is a software that translates CAD/CAM designs into numerical commands, directing machine movements for precise and efficient machining.")
+
+' person to system relations
+Rel(production_foreman, machine_monitor, "reviews production reports from")
+
+' system to system relations
+Rel_R(machine_monitor, machine_system, "collect detailed operation data from")
+@enduml
